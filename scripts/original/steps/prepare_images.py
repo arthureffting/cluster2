@@ -23,7 +23,7 @@ database_splits = os.path.join(splits_folder, args.dataset)
 
 print("[Preparing images] Model: SFR | Dataset: ", args.dataset)
 
-if args.dataset == "iam":
+if args.dataset == "iam" or args.dataset == "orcas":
     splits = Split.read_from(database_splits)
 
     for dataset in splits.sets:
