@@ -15,7 +15,7 @@ def convRelu(i, batchNormalization=False, leakyRelu=False):
     cnn.add_module('conv{0}'.format(i),
                    nn.Conv2d(nIn, nOut, ks[i], ss[i], ps[i]))
     if batchNormalization:
-        cnn.add_module('batchnorm{0}'.format(i), nn.InstanceNorm2d(nOut, track_running_stats=True))
+        cnn.add_module('batchnorm{0}'.format(i), nn.InstanceNorm2d(nOut, track_running_stats=False))
         # cnn.add_module('batchnorm{0}'.format(i), nn.BatchNorm2d(nOut))
     if leakyRelu:
         cnn.add_module('relu{0}'.format(i),
