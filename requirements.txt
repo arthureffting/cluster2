@@ -10,4 +10,4 @@ cairocffi
 torch
 torchvision
 warpctc-pytorch
-yaml
+pyyaml
