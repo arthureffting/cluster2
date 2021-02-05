@@ -1,0 +1,2 @@
+
+print("[SOL alignment]")

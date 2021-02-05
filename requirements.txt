@@ -1,0 +1,13 @@
+opencv-python
+numpy
+svgpathtools
+scipy
+pillow
+matplotlib
+editdistance
+shapely
+cairocffi
+torch
+torchvision
+warpctc-pytorch
+yaml

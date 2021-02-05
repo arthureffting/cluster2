@@ -1,0 +1,22 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+opencv-python = "*"
+numpy = "*"
+svgpathtools = "*"
+scipy = "*"
+pillow = "*"
+matplotlib = "*"
+editdistance = "*"
+shapely = "*"
+cairocffi = "*"
+torch = "*"
+torchvision = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.7.0"
