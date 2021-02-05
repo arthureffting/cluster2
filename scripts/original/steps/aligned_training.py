@@ -8,23 +8,23 @@ sys.path.append(os.getcwd())
 
 
 def initial_alignment():
-    os.system('python scripts/original/aligned_fake/continuous_validation.py sample_config.yaml init')
+    os.system('python scripts/original/aligned/continuous_validation.py sample_config.yaml init')
 
 
 def continuous():
-    os.system('python scripts/original/aligned_fake/continuous_validation.py sample_config.yaml')
+    os.system('python scripts/original/aligned/continuous_validation.py sample_config.yaml')
 
 
 def sol():
-    os.system('python scripts/original/aligned_fake/continuous_hw_training.py sample_config.yaml')
+    os.system('python scripts/original/aligned/continuous_hw_training.py sample_config.yaml')
 
 
 def hw():
-    os.system('python scripts/original/aligned_fake/continuous_hw_training.py sample_config.yaml')
+    os.system('python scripts/original/aligned/continuous_hw_training.py sample_config.yaml')
 
 
 def lf():
-    os.system('python scripts/original/aligned_fake/continuous_lf_training.py sample_config.yaml')
+    os.system('python scripts/original/aligned/continuous_lf_training.py sample_config.yaml')
 
 
 # First initial alignment synchronously
