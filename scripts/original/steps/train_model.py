@@ -8,7 +8,7 @@ import os
 from scripts.models.lf import lf_dataset, lf_loss
 from scripts.models.lf.lf_dataset import LfDataset
 from scripts.models.lf.line_follower import LineFollower
-from scripts.utils.dataset_parser import load_file_list
+from scripts.utils.dataset_parser import load_file_list, load_file_list_direct
 from scripts.utils.wrapper import DatasetWrapper
 
 parser = argparse.ArgumentParser(description='Prepare data for training')
@@ -31,7 +31,7 @@ pages_folder = os.path.join(target_folder, "pages")
 char_set_path = os.path.join(pages_folder, "character_set.json")
 
 training_set_list_path = os.path.join(pages_folder, "training.json")
-training_set_list = load_file_list(training_set_list_path)
+training_set_list = load_file_list_direct(training_set_list_path)
 train_dataset = LfDataset(training_set_list,
                           augmentation=True)
 train_dataloader = DataLoader(train_dataset,
@@ -42,7 +42,7 @@ batches_per_epoch = int(args.images_per_epoch / args.batch_size)
 train_dataloader = DatasetWrapper(train_dataloader, batches_per_epoch)
 
 test_set_list_path = os.path.join(pages_folder, "testing.json")
-test_set_list = load_file_list(test_set_list_path)
+test_set_list = load_file_list_direct(test_set_list_path)
 test_dataset = LfDataset(test_set_list)
 test_dataloader = DataLoader(test_dataset,
                              batch_size=1,

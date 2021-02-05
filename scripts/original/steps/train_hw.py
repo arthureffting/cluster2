@@ -10,7 +10,7 @@ import os
 from scripts.models.hw import hw_dataset, cnn_lstm
 from scripts.models.hw.hw_dataset import HwDataset
 from scripts.utils import error_rates, string_utils
-from scripts.utils.dataset_parser import load_file_list
+from scripts.utils.dataset_parser import load_file_list, load_file_list_direct
 from scripts.utils.wrapper import DatasetWrapper
 
 parser = argparse.ArgumentParser(description='Prepare data for training')
@@ -38,7 +38,7 @@ for k, v in char_set['idx_to_char'].items():
     idx_to_char[int(k)] = v
 
 training_set_list_path = os.path.join(pages_folder, "training.json")
-training_set_list = load_file_list(training_set_list_path)
+training_set_list = load_file_list_direct(training_set_list_path)
 train_dataset = HwDataset(training_set_list,
                           char_set['char_to_idx'], augmentation=True,
                           img_height=args.input_height)
@@ -49,7 +49,7 @@ train_dataloader = DataLoader(train_dataset,
 batches_per_epoch = int(args.images_per_epoch / args.batch_size)
 train_dataloader = DatasetWrapper(train_dataloader, batches_per_epoch)
 testing_set_list_path = os.path.join(pages_folder, "testing.json")
-testing_set_list = load_file_list(testing_set_list_path)
+testing_set_list = load_file_list_direct(testing_set_list_path)
 test_dataset = HwDataset(testing_set_list,
                          char_set['char_to_idx'],
                          img_height=args.input_height)

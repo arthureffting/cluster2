@@ -11,7 +11,7 @@ from scripts.models.sol.crop_transform import CropTransform
 from scripts.models.sol.sol import StartOfLineFinder
 from scripts.models.sol.sol_dataset import SolDataset
 from scripts.utils import transformation_utils
-from scripts.utils.dataset_parser import load_file_list
+from scripts.utils.dataset_parser import load_file_list, load_file_list_direct
 from scripts.utils.wrapper import DatasetWrapper
 
 parser = argparse.ArgumentParser(description='Prepare data for training')
@@ -43,7 +43,7 @@ sfr_data_folder = os.path.join(data_folder, "sfr")
 set_lists_folder = os.path.join(sfr_data_folder, args.dataset, "pages")
 
 training_set_list_path = os.path.join(set_lists_folder, "training.json")
-training_set_list = load_file_list(training_set_list_path)
+training_set_list = load_file_list_direct(training_set_list_path)
 train_dataset = SolDataset(training_set_list,
                            rescale_range=args.rescale_range,
                            transform=CropTransform({
@@ -61,7 +61,7 @@ batches_per_epoch = int(args.images_per_epoch / args.batch_size)
 train_dataloader = DatasetWrapper(train_dataloader, batches_per_epoch)
 
 testing_set_list_path = os.path.join(set_lists_folder, "testing.json")
-testing_set_list = load_file_list(testing_set_list_path)
+testing_set_list = load_file_list_direct(testing_set_list_path)
 test_dataset = SolDataset(testing_set_list,
                           rescale_range=args.rescale_range,
                           transform=None)
