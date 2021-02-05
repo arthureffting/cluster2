@@ -1,32 +1,42 @@
+import subprocess
 import sys
 import os
 import multiprocessing
 
 # Necessary to add cwd to path when script run
 # by SLURM (since it executes a copy)
-from subprocess import Popen
 
 sys.path.append(os.getcwd())
 
 
 def initial_alignment():
-    Popen('python scripts/original/aligned/continuous_validation.py sample_config.yaml init')
+    subprocess.run([sys.executable,
+                    'scripts/original/aligned/continuous_validation.py', 'sample_config.yaml', 'init'],
+                   check=True)
 
 
 def continuous():
-    Popen('python scripts/original/aligned/continuous_validation.py sample_config.yaml')
+    subprocess.run([sys.executable,
+                    'scripts/original/aligned/continuous_validation.py', 'sample_config.yaml'],
+                   check=True)
 
 
 def sol():
-    Popen('python scripts/original/aligned/continuous_hw_training.py sample_config.yaml')
+    subprocess.run([sys.executable,
+                    'scripts/original/aligned/continuous_sol_training.py', 'sample_config.yaml'],
+                   check=True)
 
 
 def hw():
-    Popen('python scripts/original/aligned/continuous_hw_training.py sample_config.yaml')
+    subprocess.run([sys.executable,
+                    'scripts/original/aligned/continuous_hw_training.py', 'sample_config.yaml'],
+                   check=True)
 
 
 def lf():
-    Popen('python scripts/original/aligned/continuous_lf_training.py sample_config.yaml')
+    subprocess.run([sys.executable,
+                    'scripts/original/aligned/continuous_lf_training.py', 'sample_config.yaml'],
+                   check=True)
 
 
 # First initial alignment synchronously
