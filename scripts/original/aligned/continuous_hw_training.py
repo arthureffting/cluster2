@@ -29,7 +29,7 @@ def training_step(config):
         char_set = json.load(f)
 
     idx_to_char = {}
-    for k, v in char_set['idx_to_char'].iteritems():
+    for k, v in char_set['idx_to_char'].items():
         idx_to_char[int(k)] = v
 
     training_set_list = load_file_list(train_config['training_set'])

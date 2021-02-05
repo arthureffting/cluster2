@@ -7,7 +7,7 @@ def load_char_set(char_set_path):
         char_set = json.load(f)
 
     idx_to_char = {}
-    for k, v in char_set['idx_to_char'].iteritems():
+    for k, v in char_set['idx_to_char'].items():
         idx_to_char[int(k)] = v
 
     return idx_to_char, char_set['char_to_idx']
