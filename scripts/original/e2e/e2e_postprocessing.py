@@ -1,9 +1,8 @@
 import numpy as np
-import nms
 import copy
 
 from scripts.utils import string_utils, error_rates
-
+from scripts.original.e2e.nms import *
 
 def get_trimmed_polygons(out):
     all_polygons = []
@@ -100,7 +99,7 @@ def postprocess(out, **kwargs):
 
     if sol_nms_threshold is not None:
         raise Exception("This is not correct")
-        pick = nms.sol_nms_single(out['sol'], sol_nms_threshold)
+        pick = sol_nms_single(out['sol'], sol_nms_threshold)
         out['sol'] =  out['sol'][pick]
 
     if lf_nms_params is not None:
