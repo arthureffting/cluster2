@@ -81,5 +81,4 @@ class CRNN(nn.Module):
 
 def create_model(config):
     crnn = CRNN(config['cnn_out_size'], config['num_of_channels'], config['num_of_outputs'], 512)
-    crnn.cuda()
     return crnn

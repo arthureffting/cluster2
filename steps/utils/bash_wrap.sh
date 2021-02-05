@@ -48,6 +48,6 @@ if [[ $DATASET == "$BOTH" ]]; then DATASET_FOLDERS+=("$IAM" "$ORCAS"); else DATA
 
 for MODEL_FOLDER in "${MODEL_FOLDERS[@]}"; do
   for DATASET_FOLDER in "${DATASET_FOLDERS[@]}"; do
-    python "scripts/$MODEL_FOLDER/steps/$SCRIPT" --dataset="$DATASET_FOLDER"
+    python3 "scripts/$MODEL_FOLDER/steps/$SCRIPT" --dataset="$DATASET_FOLDER"
   done
 done

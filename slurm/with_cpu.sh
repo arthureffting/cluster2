@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=12000
 #SBATCH -o /cluster/%u/cluster2/slurm/results/%j.out
-#SBATCH -e /cluster/%u/cluster2/slurm/results/%j.err
+#SBATCH -e /cluster/%u/cluster2/slurm/results/%
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=effting@accuras.de
 #Timelimit format: "hours:minutes:seconds"
