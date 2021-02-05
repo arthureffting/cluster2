@@ -11,3 +11,4 @@ torch
 torchvision
 warpctc-pytorch
 pyyaml
+pyclipper
