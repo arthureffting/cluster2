@@ -14,7 +14,7 @@ originals_folder = os.getenv("ORIGINAL_FOLDER") if os.getenv("ORIGINAL_FOLDER") 
 splits_folder = os.getenv("SPLIT_FOLDER") if os.getenv("SPLIT_FOLDER") else "data/split"
 
 # Should store everything under data/sfr/<dataset>
-target_folder = os.path.join(data_folder, "sfr", args.dataset)
+target_folder = os.path.join(data_folder, "sfrs", args.dataset)
 pages_folder = os.path.join(target_folder, "pages")
 database_original_folder = os.path.join(originals_folder, args.dataset)
 database_splits = os.path.join(splits_folder, args.dataset)

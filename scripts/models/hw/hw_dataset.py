@@ -33,7 +33,7 @@ def collate(batch):
         all_labels[i, 0:len(l)] = np.array(l)
         label_lengths.append(len(l))
 
-    #all_labels = np.concatenate(all_labels)
+    # all_labels = np.concatenate(all_labels)
     label_lengths = np.array(label_lengths)
 
     line_imgs = input_batch.transpose([0, 3, 1, 2])
@@ -65,7 +65,7 @@ class HwDataset(Dataset):
                 continue
             for i in range(len(d)):
 
-                if 'hw_path' not in d[i]:
+                if 'hw_path' not in d[i] and 'image_path' not in d[i]:
                     continue
                 self.detailed_ids.append((ids_idx, i))
 
@@ -87,10 +87,10 @@ class HwDataset(Dataset):
         if gt_json is None:
             return None
 
-        if 'hw_path' not in gt_json[line_idx]:
+        if 'hw_path' not in gt_json[line_idx] and 'image_path' not in gt_json[line_idx]:
             return None
 
-        hw_path = gt_json[line_idx]['hw_path']
+        hw_path = gt_json[line_idx]['hw_path'] if "hw_path" in gt_json[line_idx] else gt_json[line_idx]["image_path"]
 
         hw_path = hw_path.split("/")[-1:]
         hw_path = "/".join(hw_path)

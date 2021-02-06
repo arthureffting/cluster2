@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser(description='Prepare data for training')
 parser.add_argument("--dataset", default="iam")
 parser.add_argument("--input_height", default=32)
 parser.add_argument("--learning_rate", default=0.0002)
-parser.add_argument("--batch_size", default=8)
+parser.add_argument("--batch_size", default=1)
 parser.add_argument("--images_per_epoch", default=1000)
 parser.add_argument("--stop_after_no_improvement", default=10)
 parser.add_argument("--output", default="scripts/original/snapshots/training")
@@ -44,10 +44,15 @@ train_dataset = HwDataset(training_set_list,
                           img_height=args.input_height)
 train_dataloader = DataLoader(train_dataset,
                               batch_size=args.batch_size,
-                              shuffle=True, num_workers=0, drop_last=True,
+                              shuffle=True,
+                              num_workers=0,
+                              drop_last=True,
                               collate_fn=hw_dataset.collate)
 batches_per_epoch = int(args.images_per_epoch / args.batch_size)
 train_dataloader = DatasetWrapper(train_dataloader, batches_per_epoch)
+
+
+
 testing_set_list_path = os.path.join(pages_folder, "testing.json")
 testing_set_list = load_file_list_direct(testing_set_list_path)
 test_dataset = HwDataset(testing_set_list,
@@ -55,7 +60,8 @@ test_dataset = HwDataset(testing_set_list,
                          img_height=args.input_height)
 test_dataloader = DataLoader(test_dataset,
                              batch_size=args.batch_size,
-                             shuffle=False, num_workers=0,
+                             shuffle=False,
+                             num_workers=0,
                              collate_fn=hw_dataset.collate)
 
 criterion = CTCLoss(blank=0, zero_infinity=True)
@@ -66,7 +72,7 @@ hw = cnn_lstm.create_model({
     "cnn_out_size": 512,
     "input_height": args.input_height,
     "char_set_path": char_set_path
-}).cuda()
+}).cpu()
 
 optimizer = torch.optim.Adam(hw.parameters(), lr=args.learning_rate)
 lowest_loss = np.inf
@@ -85,7 +91,7 @@ for epoch in range(1000):
         labels = Variable(x['labels'], requires_grad=False)
         label_lengths = Variable(x['label_lengths'], requires_grad=False)
 
-        preds = hw(line_imgs.cuda())
+        preds = hw(line_imgs.cpu())
         output_batch = preds.permute(1, 0, 2)
         out = output_batch.data.cpu().numpy()
 
@@ -119,7 +125,7 @@ for epoch in range(1000):
             labels = Variable(x['labels'], requires_grad=False)
             label_lengths = Variable(x['label_lengths'], requires_grad=False)
 
-            preds = hw(line_imgs).cpu()
+            preds = hw(line_imgs.cpu()).cpu()
             output_batch = preds.permute(1, 0, 2)
             out = output_batch.data.cpu().numpy()
 
