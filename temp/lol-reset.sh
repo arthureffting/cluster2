@@ -21,4 +21,4 @@ export PYTHONPATH=.
 pip3 install --user -r requirements.txt
 
 ls
-python3 scripts/new/training/train_model.py --mode=reset_threshold --dataset=iam
+python3 scripts/new/training/train_model.py --mode=reset_threshold --dataset=iam --name=reset_threshold
