@@ -372,11 +372,13 @@ def process_pairs(set_name, pairs, output_directory):
         try:
             json_path = handle_single_image(xml_path, img_path, data_output_directory, {})
             all_ground_truth.append([json_path, img_path])
-        except:
+        except Exception as e:
+            print(e)
             print("Failed to handle single image", img_path, xml_path)
 
     sys.stdout.write("\r" + "[Ground truth created] \n")
     return all_ground_truth
+
 
 
 def prepare(pairs, output_directory, set_name):

@@ -12,7 +12,7 @@ class ImageXmlPair:
         self.index = index
         self.img = img_filename
         self.xml = xml_filename
-        self.processed_xml = None
+        self.processed_xml = xml_filename
 
     def convert(self):
         data_loader = IamDataLoader(self)

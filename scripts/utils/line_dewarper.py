@@ -7,6 +7,64 @@ from scripts.utils.geometry import get_new_point, angle_between_points
 from scripts.utils.image_handling import hconcat_resize_min, vconcat_resize_min
 
 
+class Dewarper2:
+
+    def __init__(self, steps):
+        self.steps = steps
+
+    def is_point_out_of_bounds(self, img, point):
+        return point.x < 0 or point.y < 0 or point.x > img.shape[1] or point.y > img.shape[0]
+
+    def is_out_of_bounds(self, img, step):
+        return self.is_point_out_of_bounds(img, step.upper_point) \
+               or self.is_point_out_of_bounds(img, step.base_point) \
+               or self.is_point_out_of_bounds(img, step.lower_point)
+
+    def valid_steps(self, img):
+        return [step for step in self.steps if not self.is_out_of_bounds(img, step)]
+
+    def dewarped(self, img):
+        steps = self.valid_steps(img)
+        max_upper_height = max([step.calculate_upper_height() for step in self.steps])
+        max_lower_height = max([step.calculate_lower_height() for step in self.steps])
+        total_height = max_upper_height + max_lower_height
+        extraction_points = []
+
+        concatenated_img = None
+
+        for index, current_step in enumerate(self.steps[:-1]):
+            next_step = self.steps[index + 1]
+            angle = angle_between_points(current_step.base_point, next_step.base_point)
+            upper = get_new_point(current_step.base_point, angle - 90, max_upper_height)
+            lower = get_new_point(current_step.base_point, angle + 90, max_lower_height)
+            width = current_step.base_point.distance(next_step.base_point)
+            extraction_points.append([upper, lower, width])
+
+        for index, extraction_point in enumerate(extraction_points[:-1]):
+            [upper_left, lower_left, width] = extraction_point
+            [upper_right, lower_right, _] = extraction_points[index + 1]
+            background = 255 * np.ones((int(total_height), int(width), 3), np.uint8)
+
+            lower_src = np.array([[upper_left.x, upper_left.y],
+                                  [upper_right.x, upper_right.y],
+                                  [lower_right.x, lower_right.y],
+                                  [lower_left.x, lower_left.y]])
+            # Destination rectangles
+            lower_dst = np.array([[0, 0],
+                                  [width, 0.0],
+                                  [width, max_upper_height + max_lower_height],
+                                  [0.0, max_upper_height + max_lower_height]])
+
+            lower_perspective, _ = cv2.findHomography(lower_src, lower_dst)
+            warped_image = cv2.warpPerspective(img,
+                                               lower_perspective,
+                                               (background.shape[1], background.shape[0]))
+            concatenated_img = warped_image if concatenated_img is None else hconcat_resize_min(
+                [concatenated_img, warped_image])
+
+        return concatenated_img
+
+
 class Dewarper:
 
     def __init__(self, steps):
@@ -94,8 +152,8 @@ class Dewarper:
                 lower_image = lower_background if lower_image is None else hconcat_resize_min(
                     [lower_image, lower_background])
 
-            #cv2.waitKey(0)
-            #cv2.destroyAllWindows()
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
 
         return lower_image
 
@@ -141,8 +199,8 @@ class Dewarper:
                                             (upper_background.shape[1], upper_background.shape[0]))
             upper_image = upper_out if upper_image is None else hconcat_resize_min([upper_image, upper_out])
 
-            #cv2.waitKey(0)
-            #cv2.destroyAllWindows()
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
 
         return upper_image
 

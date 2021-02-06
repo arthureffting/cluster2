@@ -34,7 +34,7 @@ def get_subdivide_pt(i, pred_full, lf):
 
     return x, y
 
-class LfDataset(Dataset):
+class LolDatasetAlternative(Dataset):
     def __init__(self, set_list, random_subset_size=None, augmentation=False):
         self.augmentation = augmentation
 
@@ -70,7 +70,6 @@ class LfDataset(Dataset):
 
         positions = []
         positions_xy = []
-
 
         if 'lf' not in gt_json[line_idx]:
             return None

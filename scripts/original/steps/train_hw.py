@@ -66,45 +66,45 @@ hw = cnn_lstm.create_model({
     "cnn_out_size": 512,
     "input_height": args.input_height,
     "char_set_path": char_set_path
-}).cpu()
+}).cuda()
 
 optimizer = torch.optim.Adam(hw.parameters(), lr=args.learning_rate)
 lowest_loss = np.inf
 cnt_since_last_improvement = 0
+
+dtype = torch.cuda.FloatTensor
 
 for epoch in range(1000):
     print("Epoch", epoch)
     sum_loss = 0.0
     steps = 0.0
     hw.train()
+    for i, x in enumerate(train_dataloader):
 
-    with torch.enable_grad():
-        for i, x in enumerate(train_dataloader):
+        line_imgs = Variable(x['line_imgs'].type(dtype), requires_grad=False)
+        labels = Variable(x['labels'], requires_grad=False)
+        label_lengths = Variable(x['label_lengths'], requires_grad=False)
 
-            line_imgs = x['line_imgs']
-            labels = x['labels']
-            label_lengths = x['label_lengths']
+        preds = hw(line_imgs.cuda())
+        output_batch = preds.permute(1, 0, 2)
+        out = output_batch.data.cpu().numpy()
 
-            preds = hw(line_imgs)
-            output_batch = preds.permute(1, 0, 2)
-            out = output_batch.data.cpu().numpy()
+        for i, gt_line in enumerate(x['gt']):
+            logits = out[i, ...]
+            pred, raw_pred = string_utils.naive_decode(logits)
+            pred_str = string_utils.label2str_single(pred, idx_to_char, False)
+            cer = error_rates.cer(gt_line, pred_str)
+            sum_loss += cer
+            steps += 1
 
-            for i, gt_line in enumerate(x['gt']):
-                logits = out[i, ...]
-                pred, raw_pred = string_utils.naive_decode(logits)
-                pred_str = string_utils.label2str_single(pred, idx_to_char, False)
-                cer = error_rates.cer(gt_line, pred_str)
-                sum_loss += cer
-                steps += 1
+        batch_size = preds.size(1)
+        preds_size = Variable(torch.IntTensor([preds.size(0)] * batch_size))
+        loss = criterion(preds.contiguous(), labels.contiguous(), preds_size.contiguous(), label_lengths.contiguous())
+        # print "after"
 
-            batch_size = preds.size(1)
-            preds_size = Variable(torch.IntTensor([preds.size(0)] * batch_size))
-            loss = criterion(preds.contiguous(), labels.contiguous(), preds_size.contiguous(), label_lengths.contiguous())
-            # print "after"
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
     print("Train Loss", sum_loss / steps)
     print("Real Epoch", train_dataloader.epoch)
@@ -115,9 +115,9 @@ for epoch in range(1000):
 
     with torch.no_grad():
         for x in test_dataloader:
-            line_imgs = x['line_imgs']
-            labels = x['labels']
-            label_lengths = x['label_lengths']
+            line_imgs = Variable(x['line_imgs'].type(dtype), requires_grad=False)
+            labels = Variable(x['labels'], requires_grad=False)
+            label_lengths = Variable(x['label_lengths'], requires_grad=False)
 
             preds = hw(line_imgs).cpu()
             output_batch = preds.permute(1, 0, 2)
