@@ -74,7 +74,7 @@ test_dataloader = DataLoader(test_dataset,
                              shuffle=False,
                              num_workers=0,
                              collate_fn=lol_dataset.collate)
-test_dataloader = DatasetWrapper(test_dataloader, 400)
+#test_dataloader = DatasetWrapper(test_dataloader, 400)
 
 validation_path = os.path.join(pages_folder, "validation.json")
 validation_list = load_file_list_direct(validation_path)
