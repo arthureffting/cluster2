@@ -8,7 +8,7 @@
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=effting@accuras.de
 #Timelimit format: "hours:minutes:seconds"
-#SBATCH --time=02:30:00
+#SBATCH --time=24:00:00
 
 # Tell pipenv to install the virtualenvs in the cluster folder
 
