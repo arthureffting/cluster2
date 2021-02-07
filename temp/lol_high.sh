@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=Outliner-1
+#SBATCH --job-name=sfrs-high
 #SBATCH --ntasks=4
 #SBATCH --cpus-per-task=2
 #SBATCH --gres=gpu:1
@@ -18,6 +18,6 @@ export PYTHONPATH=.
 # Small Python packages can be installed in own home directory. Not recommended for big packages like tensorflow -> Follow instructions for pipenv below
 # cluster_requirements.txt is a text file listing the required pip packages (one package per line)
 
-pip3 install --user -r requirements.txt
+#pip3 install --user -r requirements.txt
 
-python3 scripts/new/training/train_model.py --mode=reset_threshold --dataset=iam --name=reset_1000_100 --images_per_epoch=1000 --testing_images_per_epoch=100
+python3 scripts/new/training/train_model.py --dataset=iam --name=high_lr --images_per_epoch=5000 --testing_images_per_epoch=1000 --learning_rate=0.001

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=Outliner-1
+#SBATCH --job-name=sfrs-med
 #SBATCH --ntasks=4
 #SBATCH --cpus-per-task=2
 #SBATCH --gres=gpu:1
@@ -11,7 +11,7 @@
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=effting@accuras.de
 
-# Tell pipenv to install the virtualenvs in the cluster foldesbar
+# Tell pipenv to install the virtualenvs in the cluster folder
 export WORKON_HOME==/cluster/$(whoami)/.python_cache
 export PYTHONPATH=.
 
@@ -20,4 +20,4 @@ export PYTHONPATH=.
 
 pip3 install --user -r requirements.txt
 
-python3 scripts/new/training/train_model.py --mode=reset_threshold --dataset=iam --name=reset_2000_200 --images_per_epoch=2000 --testing_images_per_epoch=200
+python3 scripts/new/training/train_model.py --dataset=iam --name=medium_lr --images_per_epoch=5000 --testing_images_per_epoch=1000 --learning_rate=0.0001

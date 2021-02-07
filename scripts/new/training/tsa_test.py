@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from scripts.models.lol import lol_dataset
 from scripts.models.lol.lol_dataset import LolDataset
 from scripts.models.lol.lol_model_patching_alt import LineOutlinerTsa
+from scripts.models.lol.loss import distributed_weights
 from scripts.original.iam_conversion.iam_data_loader import Point
 from scripts.utils.dataset_parser import load_file_list_direct
 from scripts.utils.files import create_folders
@@ -26,7 +27,7 @@ parser.add_argument("--batch_size", default=1)
 parser.add_argument("--images_per_epoch", default=5000)
 parser.add_argument("--stop_after_no_improvement", default=20)
 parser.add_argument("--learning_rate", default=0.0002)
-parser.add_argument("--tsa_size", default=3)
+parser.add_argument("--tsa_size", default=5)
 parser.add_argument("--patch_ratio", default=5)
 parser.add_argument("--output", default="scripts/original/snapshots/training")
 parser.add_argument("--model", default="scripts/new/snapshots/training2/lol-last.pt")
@@ -46,8 +47,7 @@ test_dataloader = DataLoader(test_dataset,
                              num_workers=0,
                              collate_fn=lol_dataset.collate)
 
-lol = LineOutlinerTsa()
-lol = LineOutlinerTsa(path=os.path.join("scripts", "new", "snapshots", "lol", "outline", "last.pt"))
+lol = LineOutlinerTsa(tsa_size=5, path=os.path.join("scripts", "new", "snapshots", "lol-sep", "separated-loss", "last.pt"))
 lol.eval()
 lol.cuda()
 
@@ -72,6 +72,7 @@ for index, x in enumerate(test_dataloader):
 
     predicted_steps, length, input = lol(img, sol, ground_truth, max_steps=30, disturb_sol=False)
 
+
     vertical_concats = []
     for tsa_line in input:
         for tsa_image in tsa_line:
@@ -82,7 +83,7 @@ for index, x in enumerate(test_dataloader):
                 horizontal_concats.append(img_np)
                 horizontal_concats.append(np.zeros((64, 2, 3), dtype=np.float32))
             vertical_concats.append(cv2.hconcat(horizontal_concats))
-            vertical_concats.append(np.zeros((2, (3 * 2) + (64 * 3), 3), dtype=np.float32))
+            vertical_concats.append(np.zeros((2, (args.tsa_size * 2) + (64 * args.tsa_size), 3), dtype=np.float32))
     s_path = os.path.join("screenshots", "tsa", str(counter) + ".png")
     cv2.imwrite(s_path, cv2.vconcat(vertical_concats))
     create_folders(s_path)

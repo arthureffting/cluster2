@@ -161,9 +161,10 @@ class FullyConnectedLayer(nn.Module):
 
 class LineOutlinerTsa(nn.Module):
 
-    def __init__(self, path=None, patch_ratio=5, tsa_size=3, patch_size=64):
+    def __init__(self, path=None, patch_ratio=5, tsa_size=3, min_height=32, patch_size=64):
         super(LineOutlinerTsa, self).__init__()
         self.tsa_size = tsa_size
+        self.min_height = min_height
         self.patch_size = patch_size
         self.patch_ratio = patch_ratio
 
@@ -200,7 +201,7 @@ class LineOutlinerTsa(nn.Module):
         img.cuda()
 
         # tensor([tsa, channels, width, height])
-        input = torch.zeros((self.tsa_size, 3, self.patch_size, self.patch_size)).cuda()
+        input = ((255 / 128) - 1) * torch.ones((1 + self.tsa_size, 3, self.patch_size, self.patch_size)).cuda()
 
         steps_ran = 0
 
@@ -256,6 +257,7 @@ class LineOutlinerTsa(nn.Module):
 
             y = input.cuda().unsqueeze(0)
             y = self.tsa(y)
+            y = y[:, 1:, :, :, :]
             after_tsa_copy = y.detach().cpu().clone()
             tsa_sequence.append(after_tsa_copy)
             y = y.squeeze(0)
@@ -303,7 +305,7 @@ class LineOutlinerTsa(nn.Module):
             lower_point = torch.add(lower_point, current_base)
 
             current_height = torch.dist(upper_point, current_base)
-            current_height = torch.max(current_height, torch.tensor(16).cuda())
+            current_height = torch.max(current_height, torch.tensor(self.min_height).cuda())
             stop_confidence = torch.sigmoid(y[5])
 
             results.append(torch.stack([
@@ -326,4 +328,7 @@ class LineOutlinerTsa(nn.Module):
                         or lower_distance > current_threshold:
                     break
 
-        return None if len(results) == 0 else torch.stack(results), steps_ran, tsa_sequence
+        if len(results) == 0:
+            return torch.zeros((0, 5, 2)).cuda(), 0, []
+        else:
+            return torch.stack(results), steps_ran, tsa_sequence
