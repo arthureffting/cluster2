@@ -14,10 +14,10 @@ from scripts.utils.wrapper import DatasetWrapper
 parser = argparse.ArgumentParser(description='Prepare data for training')
 parser.add_argument("--dataset", default="iam")
 parser.add_argument("--batch_size", default=1)
-parser.add_argument("--images_per_epoch", default=1000)
+parser.add_argument("--images_per_epoch", default=5000)
 parser.add_argument("--stop_after_no_improvement", default=10)
 parser.add_argument("--learning_rate", default=0.0001)
-parser.add_argument("--output", default="scripts/original/snapshots/training")
+parser.add_argument("--output", default="scripts/original/snapshots/lf")
 args = parser.parse_args()
 
 

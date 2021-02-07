@@ -34,7 +34,7 @@ def get_subdivide_pt(i, pred_full, lf):
 
     return x, y
 
-class LolDatasetAlternative(Dataset):
+class LfDataset(Dataset):
     def __init__(self, set_list, random_subset_size=None, augmentation=False):
         self.augmentation = augmentation
 
