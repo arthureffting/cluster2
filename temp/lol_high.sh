@@ -18,6 +18,6 @@ export PYTHONPATH=.
 # Small Python packages can be installed in own home directory. Not recommended for big packages like tensorflow -> Follow instructions for pipenv below
 # cluster_requirements.txt is a text file listing the required pip packages (one package per line)
 
-#pip3 install --user -r requirements.txt
+pip3 install --user -r requirements.txt
 
 python3 scripts/new/training/train_model.py --dataset=iam --name=high_lr --images_per_epoch=5000 --testing_images_per_epoch=1000 --learning_rate=0.001
