@@ -77,7 +77,8 @@ test_dataloader = DataLoader(test_dataset,
                              num_workers=0,
                              collate_fn=lol_dataset.collate)
 test_dataloader = test_dataloader if args.testing_images_per_epoch is None else DatasetWrapper(test_dataloader,
-                                                                                               args.testing_images_per_epoch)
+                                                                                               int(
+                                                                                                   args.testing_images_per_epoch))
 
 validation_path = os.path.join(pages_folder, "validation.json")
 validation_list = load_file_list_direct(validation_path)

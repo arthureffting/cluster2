@@ -11,7 +11,7 @@
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=effting@accuras.de
 
-# Tell pipenv to install the virtualenvs in the cluster folder
+# Tell pipenv to install the virtualenvs in the cluster foldesbar
 export WORKON_HOME==/cluster/$(whoami)/.python_cache
 export PYTHONPATH=.
 
