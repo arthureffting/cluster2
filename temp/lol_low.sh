@@ -20,4 +20,4 @@ export PYTHONPATH=.
 
 pip3 install --user -r requirements.txt
 
-python3 scripts/new/training/train_model.py --dataset=iam --name=low_lr --images_per_epoch=5000 --testing_images_per_epoch=1000 -- learning_rate=0.00001
+python3 scripts/new/training/train_model.py --dataset=iam --name=low_lr --images_per_epoch=5000 --testing_images_per_epoch=1000 --learning_rate=0.00001
