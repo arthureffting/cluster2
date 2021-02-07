@@ -144,20 +144,18 @@ class FullyConnectedLayer(nn.Module):
     def __init__(self):
         super(FullyConnectedLayer, self).__init__()
         # Linear layer at the end to get angle and sizing
-        self.l2 = nn.Linear(512, 128)
-        self.l1 = nn.Linear(128, 8)
-        self.l1.bias.data[0] = 0  # upper x
-        self.l1.bias.data[1] = 0  # upper y
-        self.l1.bias.data[2] = 0  # base x
-        self.l1.bias.data[3] = 0  # base y
-        self.l1.bias.data[4] = 0  # lower x
-        self.l1.bias.data[5] = 0  # lower y
-        self.l1.bias.data[6] = 0  # angle
-        self.l1.bias.data[7] = -6  # stop confidence
+        self.l1 = nn.Linear(512, 6)
+        self.l1.bias.data[0] = 0  # base x
+        self.l1.bias.data[1] = 0  # base y
+        self.l1.bias.data[2] = 0  # upper_height
+        self.l1.bias.data[3] = 0  # lower_height
+        self.l1.bias.data[4] = 0  # angle
+        self.l1.bias.data[5] = -6  # stop confidence
 
     def forward(self, y):
-        y = self.l2(y)
+        # y = self.l2(y)
         y = self.l1(y)
+
         return y
 
 
@@ -271,54 +269,49 @@ class LineOutlinerTsa(nn.Module):
             y = torch.flatten(y, 0)
             y = self.fully_connected(y)
 
+            # Biases
             size = input[-1, :, :, :].shape[1] / self.patch_ratio
-            upper_prior_x = size
-            upper_prior_y = - size
             base_prior_x = size
             base_prior_y = 0
-            lower_prior_x = size
-            lower_prior_y = 0
-            y[0] = torch.add(y[0], upper_prior_x)
-            y[1] = torch.add(y[1], upper_prior_y)
-            y[2] = torch.add(y[2], base_prior_x)
-            y[3] = torch.add(y[3], base_prior_y)
-            y[4] = torch.add(y[4], lower_prior_x)
-            y[5] = torch.add(y[5], lower_prior_y)
+            y[0] = torch.add(y[0], base_prior_x)
+            y[1] = torch.add(y[1], base_prior_y)
+            y[2] = torch.add(y[2], size)
 
-            upper_point = torch.stack([y[0], y[1]])
-            base_point = torch.stack([y[2], y[3]])
-            lower_point = torch.stack([y[4], y[5]])
-            current_angle = torch.add(current_angle, y[6])
-            stop_confidence = torch.sigmoid(y[7])
+            base_point = torch.stack([y[0], y[1]])
+            current_angle = torch.add(current_angle, y[4])
 
-            rotation = torch.tensor(
+            rotation_matrix = torch.tensor(
                 [[torch.cos(torch.deg2rad(current_angle)), -1.0 * torch.sin(torch.deg2rad(current_angle))],
                  [1.0 * torch.sin(torch.deg2rad(current_angle)), torch.cos(torch.deg2rad(current_angle))]]).cuda()
-            upper_point = torch.matmul(upper_point, rotation.t())
-            base_point = torch.matmul(base_point, rotation.t())
-            lower_point = torch.matmul(lower_point, rotation.t())
 
-            scaling = torch.tensor([[current_scale, 0.], [0., current_scale]]).cuda()
+            scale_matrix = torch.tensor([[current_scale, 0.], [0., current_scale]]).cuda()
 
-            upper_point = torch.matmul(upper_point, scaling)
-            base_point = torch.matmul(base_point, scaling)
-            lower_point = torch.matmul(lower_point, scaling)
+            upper_point = torch.stack([torch.tensor(0.0).cuda(), torch.mul(y[2], -1)])
+            lower_point = torch.stack([torch.tensor(0.0).cuda(), y[3]])
 
-            upper_point = upper_point + current_base
-            base_point = base_point + current_base
-            lower_point = lower_point + current_base
+            # Trasnform base_point
+            base_point = torch.matmul(base_point, rotation_matrix.t())
+            base_point = torch.matmul(base_point, scale_matrix)
+            current_base = torch.add(base_point, current_base)
 
-            current_base = base_point
-            current_height = torch.dist(base_point, upper_point)
+            # Rotate outlines
+            upper_point = torch.matmul(upper_point, scale_matrix)
+            lower_point = torch.matmul(lower_point, scale_matrix)
+            upper_point = torch.matmul(upper_point, rotation_matrix.t())
+            lower_point = torch.matmul(lower_point, rotation_matrix.t())
+            upper_point = torch.add(upper_point, current_base)
+            lower_point = torch.add(lower_point, current_base)
+
+            current_height = torch.dist(upper_point, current_base)
             current_height = torch.max(current_height, torch.tensor(16).cuda())
-            # current_height = torch.min(current_height, torch.tensor(80).cuda())
+            stop_confidence = torch.sigmoid(y[5])
 
             results.append(torch.stack([
-                upper_point,
+                upper_point.clone(),
                 current_base.clone(),
-                lower_point,
+                lower_point.clone(),
                 torch.stack([current_angle.clone(), torch.tensor(0).cuda()]),
-                torch.stack([stop_confidence, torch.tensor(0).cuda()])
+                torch.stack([stop_confidence.clone(), torch.tensor(0).cuda()])
             ], dim=0))
 
             steps_ran += 1
@@ -327,10 +320,10 @@ class LineOutlinerTsa(nn.Module):
                 break
             elif reset_threshold is not None:
                 upper_distance = torch.dist(upper_point.clone().detach().cpu(), steps[steps_ran][0])
-                base_distance = torch.dist(base_point.clone().detach().cpu(), steps[steps_ran][1])
+                lower_distance = torch.dist(lower_point.clone().detach().cpu(), steps[steps_ran][2])
                 current_threshold = reset_threshold
                 if upper_distance > current_threshold \
-                        or base_distance > current_threshold:
+                        or lower_distance > current_threshold:
                     break
 
         return None if len(results) == 0 else torch.stack(results), steps_ran, tsa_sequence

@@ -1,7 +1,7 @@
 import torch
 from shapely.geometry import Point
 
-from scripts.models.lol.lol_model_patching import LineOutlinerTsa
+from scripts.models.lol.lol_model_patching_alt import LineOutlinerTsa
 from scripts.utils.files import create_folders
 from scripts.utils.painter import Painter
 

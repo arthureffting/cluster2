@@ -8,6 +8,7 @@ import os
 from scripts.models.lf import lf_dataset, lf_loss
 from scripts.models.lf.lf_dataset import LfDataset
 from scripts.models.lf.line_follower import LineFollower
+from scripts.utils.continuous_state import load_lf
 from scripts.utils.dataset_parser import load_file_list, load_file_list_direct
 from scripts.utils.wrapper import DatasetWrapper
 
@@ -20,9 +21,7 @@ parser.add_argument("--learning_rate", default=0.0001)
 parser.add_argument("--output", default="scripts/original/snapshots/lf")
 args = parser.parse_args()
 
-
 print("[Training Line-Follower] Model: SFR | Dataset: ", args.dataset)
-
 
 data_folder = os.getenv("DATA_FOLDER") if os.getenv("DATA_FOLDER") else "data"
 
@@ -49,8 +48,7 @@ test_dataloader = DataLoader(test_dataset,
                              shuffle=False, num_workers=0,
                              collate_fn=lf_dataset.collate)
 
-line_follower = LineFollower()
-line_follower.cuda()
+line_follower = load_lf(os.path.join(args.output, "lf.pt"))
 optimizer = torch.optim.Adam(line_follower.parameters(), lr=args.learning_rate)
 
 dtype = torch.cuda.FloatTensor
@@ -123,7 +121,7 @@ for epoch in range(1000):
         print("Saving Best")
         if not os.path.exists(args.output):
             os.makedirs(args.output)
-        torch.save(line_follower.state_dict(), os.path.join(args.output, 'lf.pt'))
+        torch.save(line_follower.state_dict(), os.path.join(args.output, 'lf-2nd-run.pt'))
 
     print("Test Loss", sum_loss / steps, lowest_loss)
     print()

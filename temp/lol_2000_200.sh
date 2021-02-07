@@ -20,5 +20,4 @@ export PYTHONPATH=.
 
 pip3 install --user -r requirements.txt
 
-ls
-python3 scripts/new/training/train_model.py --mode=max_steps --dataset=iam --name=max_steps
+python3 scripts/new/training/train_model.py --mode=reset_threshold --dataset=iam --name=reset_2000_200 --images_per_epoch=2000 --testing_images_per_epoch=200
