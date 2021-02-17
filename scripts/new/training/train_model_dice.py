@@ -9,13 +9,11 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
-
 from scripts.models.lol import lol_dataset
-from scripts.models.lol.evaluation import evaluation_cost
+from scripts.models.lol.dice_coefficient.dice_coefficient import DiceCoefficientLoss
+from scripts.models.lol.dice_coefficient.utils import to_upper_lower_polygons, complete_polygons
 from scripts.models.lol.lol_dataset import LolDataset
-
 from scripts.models.lol.lol_model_patching_alt import LineOutlinerTsa
-from scripts.models.lol.loss import outline_loss, stop_loss, distributed_weights, separate_losses
 from scripts.new.training.run_model import paint_model_run
 from scripts.utils.dataset_parser import load_file_list_direct
 from scripts.utils.files import create_folders, save_to_json
@@ -24,10 +22,10 @@ from scripts.utils.wrapper import DatasetWrapper
 parser = argparse.ArgumentParser(description='Prepare data for training')
 parser.add_argument("--dataset", default="iam")
 parser.add_argument("--batch_size", default=1)
-parser.add_argument("--images_per_epoch", default=1000)
-parser.add_argument("--testing_images_per_epoch", default=100)
+parser.add_argument("--images_per_epoch", default=100)
+parser.add_argument("--testing_images_per_epoch", default=10)
 parser.add_argument("--stop_after_no_improvement", default=50)
-parser.add_argument("--learning_rate", default=0.001)
+parser.add_argument("--learning_rate", default=0.0001)
 
 # Patching
 parser.add_argument("--tsa_size", default=5)
@@ -36,8 +34,8 @@ parser.add_argument("--patch_size", default=64)
 parser.add_argument("--min_height", default=32)
 
 # Training techniques
-parser.add_argument("--name", default="conditional-loss")
-parser.add_argument("--reset-threshold", default=25)
+parser.add_argument("--name", default="dice-loss-upper-lower")
+parser.add_argument("--reset-threshold", default=40)
 parser.add_argument("--max_steps", default=6)
 parser.add_argument("--random-sol", default=True)
 
@@ -101,7 +99,7 @@ optimizer = torch.optim.Adam(lol.parameters(), lr=float(args.learning_rate))
 
 dtype = torch.cuda.FloatTensor
 
-best_loss = 0.0
+best_loss = np.inf
 cnt_since_last_improvement = 0
 
 for epoch in range(1000):
@@ -132,16 +130,22 @@ for epoch in range(1000):
             predicted_steps, length, _ = lol(img,
                                              sol,
                                              ground_truth_used,
-                                             reset_threshold=25,
+                                             reset_threshold=args.reset_threshold,
                                              disturb_sol=True)
 
             if length == 0: break
             desired_steps = ground_truth_used[1:1 + length].cuda()
 
-            if desired_steps[1 if len(desired_steps) > 1 else 0][4][0].item() > 0:
-                total_loss = stop_loss(predicted_steps, desired_steps)
-            else:
-                total_loss = outline_loss(predicted_steps, desired_steps)
+            predicted_polygon, desired_polygon = complete_polygons(sol, predicted_steps, desired_steps, indexes=[0, 2])
+            try:
+                total_loss, _ = DiceCoefficientLoss(predicted_polygon, desired_polygon)
+            except Exception as e:
+                print("\nOccured at", x["img_path"], ": ", e)
+                ran_until += 1
+                continue
+
+            if total_loss is None:
+                continue
 
             optimizer.zero_grad()
             total_loss.backward()
@@ -150,7 +154,7 @@ for epoch in range(1000):
             steps += length
             ran_until += length
             sys.stdout.write("\r[Training] " + str(1 + index) + "/" + str(len(train_dataloader)) + " | mse: " + str(
-                int(sum_loss / steps)))
+                round(sum_loss / steps, 3)))
 
     print()
 
@@ -187,8 +191,14 @@ for epoch in range(1000):
 
         if length == 0: break
         desired_steps = ground_truth[1:1 + length].cuda()
-        sum_loss += evaluation_cost(torch.cat([sol.unsqueeze(0), predicted_steps]),
-                                    torch.cat([sol.unsqueeze(0), desired_steps]))
+
+        predicted_polygon, desired_polygon = complete_polygons(sol, predicted_steps, desired_steps, indexes=[0, 2])
+        try:
+            total_loss, _ = DiceCoefficientLoss(predicted_polygon, desired_polygon)
+        except Exception as e:
+            print("\nOccured at", x["img_path"], ": ", e)
+            continue
+        sum_loss += total_loss.item()
         steps += 1
         sys.stdout.write(
             "\r[Testing] " + str(1 + index) + "/" + str(len(test_dataloader)) + " | dice: " + str(
@@ -204,7 +214,7 @@ for epoch in range(1000):
 
     loss_used = (sum_loss / steps)
 
-    if loss_used > best_loss:
+    if loss_used < best_loss:
         cnt_since_last_improvement = 0
         best_loss = loss_used
         if not os.path.exists(args.output):

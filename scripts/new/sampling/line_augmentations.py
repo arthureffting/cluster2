@@ -35,12 +35,12 @@ class LineAugmentation:
             step.stop_confidence = confidences[index]
             line.steps.append(step)
 
-        for index in range(by):
-            line.text += " "
-
     # Projects the SOLs backwards
     @staticmethod
     def extend_backwards(line):
+
+        if len(line.steps) < 2:
+            return
 
         direction = angle_between_points(line.steps[0].base_point, line.steps[1].base_point)
 
@@ -72,6 +72,9 @@ class LineAugmentation:
     # Cancel first step and replace it with a backward projection of the second
     @staticmethod
     def prevent_wrong_start(line, angle_threshold=45):
+
+        if len(line.steps) < 3:
+            return
 
         first_step = line.steps[0]
         second_step = line.steps[1]

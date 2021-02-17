@@ -31,6 +31,14 @@ def stop_loss(predicted, desired):
     return torch.nn.MSELoss()(predicted[:, 4, 0], desired[:, 4, 0].cuda())
 
 
+def prediction_to_polygon_coords(sol, prediction):
+    upper_points = torch.stack([sol[0]] + [p[0] for p in prediction])
+    lower_points = torch.stack([sol[2]] + [p[2] for p in prediction])
+    lower_points = torch.flip(lower_points, [0])
+    polygon_points = torch.stack([p for p in upper_points] + [p for p in lower_points])
+    return polygon_points
+
+
 # Weights each SME using the difference in confidence prediction
 def distributed_weights(predicted, desired):
     assert predicted.shape[0] == desired.shape[0]

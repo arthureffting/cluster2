@@ -1,7 +1,8 @@
 import torch
-from shapely.geometry import Point
+from shapely.geometry import Point, LineString
 
-from scripts.models.lol.lol_model_patching_alt import LineOutlinerTsa
+from scripts.models.lol.evaluation import to_polygon
+from scripts.models.lol.lol_lf import LineOutlinerTsa
 from scripts.utils.files import create_folders
 from scripts.utils.painter import Painter
 
@@ -32,7 +33,7 @@ def paint_model_run(model_path, dataloader, destination="screenshots/run.png"):
 
         sol = ground_truth[0]
 
-        predicted_steps, length, _ = lol(img, sol, ground_truth,  max_steps=30, disturb_sol=False)
+        predicted_steps, length, _ = lol(img, sol, ground_truth, max_steps=30, disturb_sol=False)
 
         # img_nps = []
         # for img_tensor in input:
@@ -50,7 +51,7 @@ def paint_model_run(model_path, dataloader, destination="screenshots/run.png"):
         upper_steps = [Point(step[0][0].item(), step[0][1].item()) for step in predicted_steps]
         baseline_steps = [Point(step[1][0].item(), step[1][1].item()) for step in predicted_steps]
         lower_steps = [Point(step[2][0].item(), step[2][1].item()) for step in predicted_steps]
-        confidences = [step[4][0].item() for step in predicted_steps]
+        confidences = [step[3][0].item() for step in predicted_steps]
         for i in range(len(ground_truth_upper_steps)):
             painter.draw_line(
                 [ground_truth_upper_steps[i], ground_truth_baseline_steps[i], ground_truth_lower_steps[i]],
@@ -69,16 +70,24 @@ def paint_model_run(model_path, dataloader, destination="screenshots/run.png"):
             next_step = baseline_steps[index + 1]
             next_upper = upper_steps[index + 1]
             next_lower = lower_steps[index + 1]
-            confidence = confidences[index]
-            painter.draw_area([upper, next_upper, next_step, next_lower, lower, step], line_color=(0, 0, 0, 0),
-                              line_width=0,
-                              fill_color=(1, 0, 0, confidence))
+            # confidence = confidences[index]
+            # painter.draw_area([upper, next_upper, next_step, next_lower, lower, step], line_color=(0, 0, 0, 0),
+            #                  line_width=0,
+            #                 fill_color=(1, 0, 0, confidence))
 
         painter.draw_line(baseline_steps, line_width=4, color=(0, 0, 1, 1))
         painter.draw_line(upper_steps, line_width=4, color=(1, 0, 1, 1))
         painter.draw_line(lower_steps, line_width=4, color=(1, 0, 1, 1))
         for step in baseline_steps:
             painter.draw_point(step, radius=6)
+
+        upper_line = [Point(i[0][0].item(), i[0][1].item()) for i in predicted_steps]
+        baseline = [Point(i[1][0].item(), i[1][1].item()) for i in predicted_steps]
+        lower_line = [Point(i[2][0].item(), i[2][1].item()) for i in predicted_steps]
+
+        painter.draw_line(baseline, color=(0, 0, 1, 1), line_width=3)
+        painter.draw_line(upper_line, color=(1, 0, 1, 1), line_width=3)
+        painter.draw_line(lower_line, color=(1, 0, 1, 1), line_width=3)
 
         sol = {
             "upper_point": ground_truth[0][0],
@@ -92,6 +101,20 @@ def paint_model_run(model_path, dataloader, destination="screenshots/run.png"):
         painter.draw_line([sol_lower, sol_upper], color=(0, 1, 0, 1), line_width=5)
         painter.draw_point(sol_lower, color=(0, 1, 0, 1), radius=6)
         painter.draw_point(sol_upper, color=(0, 1, 0, 1), radius=6)
+
+        for i in range(len(upper_line) - 1):
+            opacity = confidences[i]
+
+            painter.draw_area([
+                upper_line[i], upper_line[i + 1],
+                baseline[i + 1], lower_line[i + 1],
+                lower_line[i], baseline[i]
+            ], fill_color=(1, 0, 0, opacity))
+
+            painter.draw_line([baseline[i], upper_line[i]], line_width=2,
+                              color=(0, 0, 0, 0.1))
+            painter.draw_line([baseline[i], lower_line[i]], line_width=2,
+                              color=(0, 0, 0, 0.1))
 
     create_folders(destination)
     painter.save(destination)

@@ -34,27 +34,27 @@ class Dewarper2:
 
         for index, current_step in enumerate(self.steps[:-1]):
             next_step = self.steps[index + 1]
-            angle = angle_between_points(current_step.base_point, next_step.base_point)
-            upper = get_new_point(current_step.base_point, angle - 90, max_upper_height)
-            lower = get_new_point(current_step.base_point, angle + 90, max_lower_height)
-            width = current_step.base_point.distance(next_step.base_point)
-            extraction_points.append([upper, lower, width])
 
-        for index, extraction_point in enumerate(extraction_points[:-1]):
-            [upper_left, lower_left, width] = extraction_point
-            [upper_right, lower_right, _] = extraction_points[index + 1]
+            # The width is the distance between the points
+            width = current_step.base_point.distance(next_step.base_point)
             background = 255 * np.ones((int(total_height), int(width), 3), np.uint8)
 
-            lower_src = np.array([[upper_left.x, upper_left.y],
-                                  [upper_right.x, upper_right.y],
-                                  [lower_right.x, lower_right.y],
-                                  [lower_left.x, lower_left.y]])
-            # Destination rectangles
-            lower_dst = np.array([[0, 0],
-                                  [width, 0.0],
-                                  [width, max_upper_height + max_lower_height],
-                                  [0.0, max_upper_height + max_lower_height]])
+            next_upper_height = next_step.base_point.distance(next_step.upper_point)
+            next_lower_height = next_step.base_point.distance(next_step.lower_point)
+            current_upper_height = current_step.base_point.distance(current_step.upper_point)
+            current_lower_height = current_step.base_point.distance(current_step.lower_point)
 
+            baseline = max_upper_height
+
+            lower_src = np.array([[current_step.upper_point.x, current_step.upper_point.y],
+                                  [next_step.upper_point.x, next_step.upper_point.y],
+                                  [next_step.lower_point.x, next_step.lower_point.y],
+                                  [current_step.lower_point.x, current_step.lower_point.y]])
+
+            lower_dst = np.array([[0.0, baseline - current_upper_height],
+                                  [width, baseline - next_upper_height],
+                                  [width, baseline + next_lower_height],
+                                  [0.0, baseline + current_lower_height]])
             lower_perspective, _ = cv2.findHomography(lower_src, lower_dst)
             warped_image = cv2.warpPerspective(img,
                                                lower_perspective,

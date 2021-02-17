@@ -87,6 +87,7 @@ class LolDataset(Dataset):
             return None
 
         steps = gt_json[line_idx]['steps']
+
         for step_index, step_data in enumerate(gt_json[line_idx]['steps'][:-1]):
             next_step_data = steps[step_index + 1]
             step_points = step_to_points(step_data)

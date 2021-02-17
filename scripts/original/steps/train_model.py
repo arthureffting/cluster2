@@ -48,7 +48,9 @@ test_dataloader = DataLoader(test_dataset,
                              shuffle=False, num_workers=0,
                              collate_fn=lf_dataset.collate)
 
-line_follower = load_lf(os.path.join(args.output, "lf.pt"))
+# line_follower = load_lf(os.path.join(args.output, "lf.pt"))
+line_follower = LineFollower(32)
+line_follower.cuda()
 optimizer = torch.optim.Adam(line_follower.parameters(), lr=args.learning_rate)
 
 dtype = torch.cuda.FloatTensor

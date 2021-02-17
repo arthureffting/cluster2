@@ -196,6 +196,8 @@ class LineOutlinerTsa(nn.Module):
         y = y.unsqueeze(0)
         y = self.final_convolutions(y)
         y = y.unsqueeze(0)
+
+
         y = torch.flatten(y, 1)
         y = torch.flatten(y, 0)
         y = self.fully_connected(y)

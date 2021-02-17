@@ -9,10 +9,6 @@ from scripts.utils.files import save_to_json, create_folders
 from scripts.utils.geometry import angle_between_points, get_new_point
 
 
-def slope(baseline):
-    dy = baseline[1][1] - baseline[0][1]
-    dx = baseline[1][0] - baseline[0][0]
-    return dy / dx
 
 
 def to_points(array):
@@ -32,6 +28,10 @@ def perpendicular(point_a, baseline):
     cd = LineString([c, d])
     return cd
 
+def slope(baseline):
+    dy = baseline[1][1] - baseline[0][1]
+    dx = baseline[1][0] - baseline[0][0]
+    return dy / dx
 
 def walk(start, slope, amount):
     new_x = start[0] + amount

@@ -7,37 +7,40 @@ import time
 
 import numpy as np
 import torch
+from shapely.geometry import LineString, Point
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
-
 from scripts.models.lol import lol_dataset
-from scripts.models.lol.evaluation import evaluation_cost
+from scripts.models.lol.dice_coefficient.dice_coefficient import DiceCoefficientLoss
+from scripts.models.lol.dice_coefficient.dice_polygon import DicePolygon
+from scripts.models.lol.dice_coefficient.utils import complete_polygons, upper_polygons, lower_polygons
+from scripts.models.lol.evaluation import to_polygon, simple_dice_coefficient
 from scripts.models.lol.lol_dataset import LolDataset
-
-from scripts.models.lol.lol_model_patching_alt import LineOutlinerTsa
-from scripts.models.lol.loss import outline_loss, stop_loss, distributed_weights, separate_losses
+from scripts.models.lol.lol_lf import LineOutlinerTsa
 from scripts.new.training.run_model import paint_model_run
 from scripts.utils.dataset_parser import load_file_list_direct
 from scripts.utils.files import create_folders, save_to_json
 from scripts.utils.wrapper import DatasetWrapper
 
+import matplotlib.pyplot as plt
+
 parser = argparse.ArgumentParser(description='Prepare data for training')
 parser.add_argument("--dataset", default="iam")
 parser.add_argument("--batch_size", default=1)
-parser.add_argument("--images_per_epoch", default=1000)
-parser.add_argument("--testing_images_per_epoch", default=100)
-parser.add_argument("--stop_after_no_improvement", default=50)
-parser.add_argument("--learning_rate", default=0.001)
+parser.add_argument("--images_per_epoch", default=2000)
+parser.add_argument("--testing_images_per_epoch", default=25)
+parser.add_argument("--stop_after_no_improvement", default=500)
+parser.add_argument("--learning_rate", default=0.000125)
 
 # Patching
 parser.add_argument("--tsa_size", default=5)
 parser.add_argument("--patch_ratio", default=5)
 parser.add_argument("--patch_size", default=64)
-parser.add_argument("--min_height", default=32)
+parser.add_argument("--min_height", default=8)
 
 # Training techniques
-parser.add_argument("--name", default="conditional-loss")
-parser.add_argument("--reset-threshold", default=25)
+parser.add_argument("--name", default="test-no-polygon")
+parser.add_argument("--reset-threshold", default=24)
 parser.add_argument("--max_steps", default=6)
 parser.add_argument("--random-sol", default=True)
 
@@ -101,9 +104,9 @@ optimizer = torch.optim.Adam(lol.parameters(), lr=float(args.learning_rate))
 
 dtype = torch.cuda.FloatTensor
 
-best_loss = 0.0
+best_loss = np.inf
 cnt_since_last_improvement = 0
-
+all_epoch_data = []
 for epoch in range(1000):
 
     epoch_data = {
@@ -114,7 +117,7 @@ for epoch in range(1000):
 
     sum_loss = 0.0
     steps = 0.0
-
+    total_steps_ran = 0
     lol.train()
 
     for index, x in enumerate(train_dataloader):
@@ -123,39 +126,35 @@ for epoch in range(1000):
         img = Variable(x['img'].type(dtype), requires_grad=False)[None, ...]
         ground_truth = x["steps"]
 
-        # Iterates over the line until the end
-        ran_until = 0
+        sol_index = random.choice(range(len(ground_truth) - 4))
 
-        while ran_until < len(ground_truth) - 2:
-            sol = ground_truth[ran_until].cuda()
-            ground_truth_used = ground_truth[ran_until:]
-            predicted_steps, length, _ = lol(img,
-                                             sol,
-                                             ground_truth_used,
-                                             reset_threshold=25,
-                                             disturb_sol=True)
+        sol = ground_truth[sol_index].cuda()
+        predicted_steps, length, _ = lol(img,
+                                         sol,
+                                         ground_truth[sol_index:],
+                                         reset_threshold=args.reset_threshold,
+                                         disturb_sol=True)
 
-            if length == 0: break
-            desired_steps = ground_truth_used[1:1 + length].cuda()
+        total_steps_ran += length
 
-            if desired_steps[1 if len(desired_steps) > 1 else 0][4][0].item() > 0:
-                total_loss = stop_loss(predicted_steps, desired_steps)
-            else:
-                total_loss = outline_loss(predicted_steps, desired_steps)
-
-            optimizer.zero_grad()
-            total_loss.backward()
-            optimizer.step()
-            sum_loss += total_loss.item()
-            steps += length
-            ran_until += length
-            sys.stdout.write("\r[Training] " + str(1 + index) + "/" + str(len(train_dataloader)) + " | mse: " + str(
-                int(sum_loss / steps)))
+        if length == 0: break
+        desired_steps = ground_truth[sol_index + 1: 1 + sol_index + length].cuda()
+        baseline_loss = torch.nn.MSELoss()(predicted_steps[:, [1], :], desired_steps[:, [1], :]) / length
+        outline_loss = torch.nn.MSELoss()(predicted_steps[:, [0, 3], :], desired_steps[:, [0, 3], :]) / length
+        baseline_loss += outline_loss
+        optimizer.zero_grad()
+        baseline_loss.backward()
+        optimizer.step()
+        sum_loss += baseline_loss.item()
+        steps += 1
+        sys.stdout.write("\r[Training] " + str(1 + index) + "/" + str(len(train_dataloader)) + " | dice: " + str(
+            round(sum_loss / steps, 3)) + " | " + "avg steps: " + str(round(total_steps_ran / steps, 3)))
 
     print()
 
     epoch_data["train"] = {
-        "loss": sum_loss / steps
+        "loss": sum_loss / steps,
+        "avg_steps": total_steps_ran / steps,
     }
 
     sum_loss = 0.0
@@ -182,14 +181,20 @@ for epoch in range(1000):
         predicted_steps, length, _ = lol(img,
                                          sol,
                                          ground_truth,
-                                         max_steps=len(ground_truth) - 1,
+                                         max_steps=len(ground_truth),
                                          disturb_sol=False)
 
         if length == 0: break
         desired_steps = ground_truth[1:1 + length].cuda()
-        sum_loss += evaluation_cost(torch.cat([sol.unsqueeze(0), predicted_steps]),
-                                    torch.cat([sol.unsqueeze(0), desired_steps]))
-        steps += 1
+
+        baseline_loss = torch.nn.MSELoss()(predicted_steps[:len(desired_steps), [1], :],
+                                           desired_steps[:, [1], :]) / length
+        outline_loss = torch.nn.MSELoss()(predicted_steps[:len(desired_steps), [0, 3], :],
+                                          desired_steps[:, [0, 3], :]) / length
+        baseline_loss += outline_loss
+
+        sum_loss += baseline_loss.item()
+        steps += length
         sys.stdout.write(
             "\r[Testing] " + str(1 + index) + "/" + str(len(test_dataloader)) + " | dice: " + str(
                 round(sum_loss / steps, 3)))
@@ -199,12 +204,16 @@ for epoch in range(1000):
     epoch_data["test"] = {
         "loss": sum_loss / steps
     }
+    all_epoch_data.append(epoch_data)
 
-    # How many steps could it run without going too far from the ground truth
-
+    plt.plot(range(len(all_epoch_data)), [epoch["test"]["loss"] for epoch in all_epoch_data], label="Testing")
+    plt.plot(range(len(all_epoch_data)), [epoch["train"]["loss"] for epoch in all_epoch_data], label="Training")
+    plt.xlabel('Epoch')
+    plt.ylabel('Inverse dice coefficient')
+    plt.savefig(os.path.join(args.output, args.name, "plot.png"))
     loss_used = (sum_loss / steps)
 
-    if loss_used > best_loss:
+    if loss_used < best_loss:
         cnt_since_last_improvement = 0
         best_loss = loss_used
         if not os.path.exists(args.output):

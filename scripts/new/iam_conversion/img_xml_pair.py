@@ -31,8 +31,9 @@ class ImageXmlPair:
         self.height_threshold = 0.8
         self.extracted_ground_truth = None
 
+        self.data_loader = IamDataLoader(self)
+
         if convert:
-            self.data_loader = IamDataLoader(self)
             self.xml_converter = IamXmlDataConverter(self)
             self.transformation = self.data_loader.get_ground_truth_data()
             self.transformation_xml = self.xml_converter.convert(self.get_transformation())

@@ -24,3 +24,8 @@ def evaluation_cost(predicted, desired):
         return (2 * intersection.area) / (prediction_polygon.area + desired_polygon.area)
     except:
         return 0
+
+
+def simple_dice_coefficient(prediction_polygon, desired_polygon):
+    intersection = desired_polygon.intersection(prediction_polygon)
+    return 1 - ((2 * intersection.area) / (prediction_polygon.area + desired_polygon.area))

@@ -1,14 +1,13 @@
 import argparse
 import os
-import sys
+from pathlib import Path
 
 import cv2
-
 from scripts.new.domain.training_image import TrainingImage
 from scripts.new.iam_conversion.concave import run_transformation_approach
 from scripts.new.iam_conversion.img_xml_pair import ImageXmlPair
 from scripts.new.iam_conversion.stepper import to_steps
-from scripts.new.patching.extract_tensor_patch import extract_tensor_patch
+from scripts.new.read_conversion.read_converter import ReadConverter
 from scripts.new.sampling.line_augmentations import LineAugmentation
 from scripts.utils.files import create_folders, save_to_json
 from scripts.utils.line_dewarper import Dewarper, Dewarper2
@@ -46,6 +45,8 @@ if args.dataset == "iam":
             pair = ImageXmlPair(page_index, database_original_folder, img_path, xml_path)
             pairs.append(pair)
 
+        pairs = pairs[0:2]
+
         # For each pair
         # Create a folder with its name
         # Extract lines
@@ -65,8 +66,8 @@ if args.dataset == "iam":
 
             for line in image.lines:
                 LineAugmentation.normalize(line)
-                LineAugmentation.extend(line, by=6, size_decay=0.9, confidence_decay=0.825)
                 LineAugmentation.extend_backwards(line)
+                LineAugmentation.extend(line, by=6, size_decay=0.9, confidence_decay=0.825)
                 LineAugmentation.enforce_minimum_height(line, minimum_height=32)
                 LineAugmentation.prevent_wrong_start(line, angle_threshold=30.0)
                 line_filename = os.path.join(folder_path, pair.index + "-" + str(line.index) + ".png")
@@ -93,6 +94,25 @@ if args.dataset == "iam":
         save_to_json(dataset_json_data, dataset_json_data_path)
 
     print("[Images prepared successfully]")
+elif args.dataset == "read":
+    print("[Preparing images for the READ dataset]")
+
+    for folder in os.listdir(database_original_folder):
+        folder_json_target_path = os.path.join(target_folder, folder + ".json")
+        folder_path = os.path.join(database_original_folder, folder)
+        pairs = []
+        dataset_json_data = []
+        for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
+            if os.path.isfile(file_path) and file_path.endswith(".png"):
+                stem = Path(file_path).stem
+                image_path = os.path.join(folder_path, stem + ".png")
+                xml_path = os.path.join(folder_path, "page", stem + ".xml")
+                pairs.append([image_path, xml_path])
+        for pair in pairs:
+            conversion = ReadConverter.convert(pair)
+
+        print(pairs)
+
 else:
-    # TODO
-    print("[Not implemented]")
+    print("[Not implemented yet]")

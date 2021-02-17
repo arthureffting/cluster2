@@ -2,11 +2,11 @@ import os
 import random
 
 import torch
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Point, Polygon, LineString
 from torch import nn
+
 from scripts.models.lol.lstm import ConvLSTM
 from scripts.new.patching.extract_tensor_patch import extract_tensor_patch
-from scripts.utils.geometry import get_new_point
 
 
 class TemporalAttension(nn.Module):
@@ -143,12 +143,14 @@ class FullyConnectedLayer(nn.Module):
     def __init__(self):
         super(FullyConnectedLayer, self).__init__()
         # Linear layer at the end to get angle and sizing
-        self.l1 = nn.Linear(512, 4)
+        self.l1 = nn.Linear(512, 7)
         # 1 first_angle
         # 2 next_angle
-        # 3 upper_height
-        # 4 lower_height
-        self.l1.bias.data[3] = -6
+        self.l1.bias.data[0] = 0  # base x
+        self.l1.bias.data[1] = 0  # base y
+        self.l1.bias.data[2] = 0  # upper height sigmoid
+        self.l1.bias.data[3] = -5  # lower height sigmoid
+        self.l1.bias.data[4] = 0  # angle
 
     def forward(self, y):
         # y = self.l2(y)
@@ -161,15 +163,33 @@ class StopModule(nn.Module):
     def __init__(self):
         super(StopModule, self).__init__()
 
-        self.c1 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
-        self.b1 = nn.BatchNorm2d(128)
+        self.c1 = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, padding=1)
+        self.b1 = nn.BatchNorm2d(32)
         self.r1 = nn.ReLU()
         self.p1 = nn.MaxPool2d(2, 2)
 
-        self.c2 = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1)
-        self.b2 = nn.BatchNorm2d(128)
+        self.c2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
+        self.b2 = nn.BatchNorm2d(64)
         self.r2 = nn.ReLU()
         self.p2 = nn.MaxPool2d(2, 2)
+
+        self.c3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1)
+        self.b3 = nn.BatchNorm2d(64)
+        self.r3 = nn.ReLU()
+        self.p3 = nn.MaxPool2d(2, 2)
+
+        self.c4 = nn.Conv2d(in_channels=64, out_channels=32, kernel_size=3, padding=1)
+        self.b4 = nn.BatchNorm2d(32)
+        self.r4 = nn.ReLU()
+        self.p4 = nn.MaxPool2d(2, 2)
+
+        self.c5 = nn.Conv2d(in_channels=32, out_channels=16, kernel_size=3, padding=1)
+        self.b5 = nn.BatchNorm2d(16)
+        self.r5 = nn.ReLU()
+        self.p5 = nn.MaxPool2d(2, 2)
+
+        self.l1 = nn.Linear(192, 1)
+        self.l1.bias.data[0] = -6
 
     def forward(self, y):
         y = self.c1(y)
@@ -182,7 +202,24 @@ class StopModule(nn.Module):
         y = self.r2(y)
         y = self.p2(y)
 
-        return y
+        y = self.c3(y)
+        y = self.b3(y)
+        y = self.r3(y)
+        y = self.p3(y)
+
+        y = self.c4(y)
+        y = self.b4(y)
+        y = self.r4(y)
+        y = self.p4(y)
+
+        y = self.c5(y)
+        y = self.b5(y)
+        y = self.r5(y)
+        y = self.p5(y)
+        y = torch.flatten(y)
+        y = self.l1(y)
+
+        return torch.sigmoid(y[0])
 
 
 class LineOutlinerTsa(nn.Module):
@@ -221,8 +258,8 @@ class LineOutlinerTsa(nn.Module):
                 steps,
                 reset_threshold=None,
                 max_steps=None,
-                min_run_tsa=False,
                 disturb_sol=True,
+                confidence_threshold=None,
                 height_disturbance=0.5,
                 angle_disturbance=30,
                 translate_disturbance=10):
@@ -260,6 +297,10 @@ class LineOutlinerTsa(nn.Module):
         results = []
         tsa_sequence = []
 
+        upper_height_stack = []
+        lower_height_stack = []
+        baseline_stack = []  # [sol_tensor[1].cuda()]
+        angle_stack = []
         while (max_steps is None or steps_ran < max_steps):
 
             current_scale = (self.patch_ratio * current_height / self.patch_size).cuda()
@@ -304,115 +345,143 @@ class LineOutlinerTsa(nn.Module):
             y = torch.flatten(y, 0)
             y = self.fully_connected(y)
 
-            # Biases
-            # size = input[-1, :, :, :].shape[1] / self.patch_ratio
-            # 0 first_angle
-            # 1 next_angle
-            # 2 upper_height
-            # 3 lower_height
-            # y[0] = torch.add(y[1], -size)
-            # y[1] = torch.add(y[2], base_prior_x)
+            size = input[0, :, :, :].shape[1] / self.patch_ratio
 
-            # Predicts variations in size, not absolute sizes
-            y[2] = torch.add(torch.sigmoid(y[2]), 0.5)
+            y[0] = torch.add(y[0], size)
+
+            y[2] = torch.sigmoid(y[2])
             y[3] = torch.sigmoid(y[3])
-
-            # y[3] = torch.add(y[5], 5)
+            # y[2] = torch.add(y[2], size)
+            # y[3] = torch.add(y[3], -size)
+            # y[4] = torch.add(y[4], size)
 
             scale_matrix = torch.stack([torch.stack([current_scale, torch.tensor(0.).cuda()]),
                                         torch.stack([torch.tensor(0.).cuda(), current_scale])]).cuda()
 
+            # Finds the next base point
+            base_rotation_matrix = torch.stack(
+                [torch.stack([torch.cos(torch.deg2rad(current_angle)), -1.0 * torch.sin(torch.deg2rad(current_angle))]),
+                 torch.stack(
+                     [1.0 * torch.sin(torch.deg2rad(current_angle)), torch.cos(torch.deg2rad(current_angle))])]).cuda()
+
             # Create a vector to represent the new base
 
-            # Finds the next base point
-            angle_to_base = torch.add(current_angle, y[0])
-            base_rotation_matrix = torch.stack(
-                [torch.stack([torch.cos(torch.deg2rad(angle_to_base)), -1.0 * torch.sin(torch.deg2rad(angle_to_base))]),
-                 torch.stack(
-                     [1.0 * torch.sin(torch.deg2rad(angle_to_base)), torch.cos(torch.deg2rad(angle_to_base))])]).cuda()
+            base_point = torch.stack([y[0], y[1]])
 
-            base_unity = torch.stack([current_height, torch.tensor(0.).cuda()])
-            base_point = torch.matmul(base_unity, base_rotation_matrix.t())
-            # base_point = torch.matmul(base_point, scale_matrix)
+            # upper_point = torch.stack([torch.tensor(0, dtype=torch.float32).cuda(), -upper_height])
+            # lower_point = torch.stack([torch.tensor(0, dtype=torch.float32).cuda(), lower_height])
+
+            base_point = torch.matmul(base_point, base_rotation_matrix.t())
+            base_point = torch.matmul(base_point, scale_matrix)
             current_base = torch.add(base_point, current_base)
-            current_angle = torch.add(current_angle, y[1])
+            upper_height = torch.mul(y[2], self.patch_size / 2)
+            lower_height = torch.mul(y[3], self.patch_size / 2)
+            current_angle = torch.add(current_angle, y[4])
 
-            points_angle = torch.mean(torch.stack([angle_to_base, current_angle]))
-            point_rotation_matrix = torch.stack(
-                [torch.stack([torch.cos(torch.deg2rad(points_angle)), -1.0 * torch.sin(torch.deg2rad(points_angle))]),
-                 torch.stack(
-                     [1.0 * torch.sin(torch.deg2rad(points_angle)), torch.cos(torch.deg2rad(points_angle))])]).cuda()
+            angle_stack.append(current_angle.clone().detach())
+            baseline_stack.append(current_base)
+            upper_height_stack.append(torch.mul(upper_height, current_scale))
+            lower_height_stack.append(torch.mul(lower_height, current_scale))
 
-            current_height = torch.mul(current_height, y[2])
-            upper_unity = torch.stack([torch.tensor(0.).cuda(), -current_height])
-            upper_point = torch.matmul(upper_unity, point_rotation_matrix.t())
-            # upper_point = torch.matmul(upper_point, scale_matrix)
-            upper_point = torch.add(upper_point, current_base)
+            # Finds the next base point
+            # point_rotation_matrix = torch.stack(
+            #    [torch.stack([torch.cos(torch.deg2rad(current_angle)), -1.0 * torch.sin(torch.deg2rad(current_angle))]),
+            #     torch.stack(
+            #         [1.0 * torch.sin(torch.deg2rad(current_angle)), torch.cos(torch.deg2rad(current_angle))])]).cuda()
 
-            current_lower_height = torch.mul(current_height, y[3])
-            lower_unity = torch.stack([torch.tensor(0.).cuda(), current_lower_height])
-            lower_point = torch.matmul(lower_unity, point_rotation_matrix.t())
+            # lower_point = torch.matmul(lower_point, point_rotation_matrix.t())
             # lower_point = torch.matmul(lower_point, scale_matrix)
-            lower_point = torch.add(lower_point, current_base)
-
-            current_height = torch.max(torch.stack([torch.dist(upper_point, current_base), torch.tensor(8.).cuda()]))
-            # Rotate outlines
-            # upper_point = torch.matmul(upper_point, scale_matrix)
-            # lower_point = torch.matmul(lower_point, scale_matrix)
-            # upper_point = torch.matmul(upper_point, rotation_matrix.t())
-            # lower_point = torch.matmul(lower_point, rotation_matrix.t())
-            # upper_point = torch.add(upper_point, current_base)
             # lower_point = torch.add(lower_point, current_base)
 
-            # stop_confidence = torch.sigmoid(y[5])
+            # upper_point = torch.matmul(upper_point, point_rotation_matrix.t())
+            # upper_point = torch.matmul(upper_point, scale_matrix)
+            # upper_point = torch.add(upper_point, current_base)
 
-            look_ahead_ratio = 3
-            look_ahead_base = current_base.clone().detach()
-            look_ahead_angle = current_angle.clone().detach()
-            look_ahead_height = current_height.clone().detach()
-            extraction_params = []
-            for i in range(look_ahead_ratio):
-                look_ahead_params = torch.stack([look_ahead_base[0],  # x
-                                                 look_ahead_base[1],  # y
-                                                 torch.mul(torch.deg2rad(look_ahead_angle), -1),  # angle
-                                                 current_height]).unsqueeze(0)
-                extraction_params.append(look_ahead_params.cuda())
-                base_point = Point(look_ahead_base[0].item(), look_ahead_base[1].item())
-                next_point = get_new_point(base_point, look_ahead_angle.item(), look_ahead_height.item())
-                look_ahead_base = torch.tensor([next_point.x, next_point.y]).cuda()
-            patches = [extract_tensor_patch(img, p, size=self.patch_size) for p in extraction_params]
-            concatenated_patches = torch.cat(patches, dim=2)
-
-            results.append(torch.stack([
-                upper_point,  # .clone(),
-                current_base,  # .clone(),
-                lower_point,  # .clone(),
-                torch.stack([current_angle.clone(), torch.tensor(0).cuda()]),
-                # torch.stack([stop_confidence.clone(), torch.tensor(0).cuda()])
-            ], dim=0))
+            # look_ahead_ratio = 3
+            # look_ahead_base = current_base.clone().detach()
+            # look_ahead_angle = current_angle.clone().detach()
+            # look_ahead_height = current_height.clone().detach()
+            # extraction_params = []
+            # for i in range(look_ahead_ratio):
+            #     look_ahead_params = torch.stack([look_ahead_base[0],  # x
+            #                                      look_ahead_base[1],  # y
+            #                                      torch.mul(torch.deg2rad(look_ahead_angle), -1),  # angle
+            #                                      current_height]).unsqueeze(0)
+            #     extraction_params.append(look_ahead_params.cuda())
+            #     base_point = Point(look_ahead_base[0].item(), look_ahead_base[1].item())
+            #     next_point = get_new_point(base_point, look_ahead_angle.item(), look_ahead_height.item())
+            #     look_ahead_base = torch.tensor([next_point.x, next_point.y]).cuda()
+            # patches = [extract_tensor_patch(img, p, size=self.patch_size) for p in extraction_params]
+            # concatenated_patches = torch.cat(patches, dim=2)
+            # stop_result = self.stop(concatenated_patches.clone().detach())
+            #
+            # gt_polygon = to_polygon(torch.stack([s.cuda() for s in steps]))
+            # upper_p = Point(upper_point[0].item(), upper_point[1].item())
+            # lower_p = Point(lower_point[0].item(), lower_point[1].item())
+            # step_line = LineString([upper_p, lower_p])
+            # total_length = upper_p.distance(lower_p)
+            # intersection = step_line.intersection(gt_polygon)
+            # desired_confidence = 1
+            # if intersection is not None and isinstance(intersection, LineString):
+            #     desired_confidence = 1 - (intersection.length / total_length)
+            #
+            # confidence_loss = torch.nn.MSELoss()(stop_result, torch.tensor(desired_confidence, dtype=torch.float32).cuda())
+            # confidence_loss.backward(retain_graph=True)
 
             # Decide whether to stop based on last step DICE AFFINITY
             steps_ran += 1
+
+            # if confidence_threshold is not None and stop_result.item() > confidence_threshold:
+            #    break
 
             # Minimum steps to fill TSA
             # if min_run_tsa and steps_ran < self.tsa_size:
             #    continue
 
             if reset_threshold is not None:
-                upper_as_point = Point(upper_point[0].item(), upper_point[1].item())
                 base_as_point = Point(current_base[0].item(), current_base[1].item())
-                lower_as_point = Point(lower_point[0].item(), lower_point[1].item())
+                # upper_as_point = Point(upper_point[0].item(), upper_point[1].item())
                 gt_step = steps[steps_ran]
-                gt_upper_point = Point(gt_step[0][0].item(), gt_step[0][1].item())
+                # gt_upper = Point(gt_step[0][0].item(), gt_step[0][1].item())
                 gt_base_point = Point(gt_step[1][0].item(), gt_step[1][1].item())
-                gt_lower_point = Point(gt_step[2][0].item(), gt_step[2][1].item())
+                # is_upper_violated = upper_as_point.distance(gt_upper) > reset_threshold
 
-                if base_as_point.distance(gt_base_point) > reset_threshold or upper_as_point.distance(
-                        gt_upper_point) > reset_threshold:
+                if base_as_point.distance(gt_base_point) > reset_threshold:
                     break
 
             if max_steps is None and steps_ran >= len(steps) - 1:
                 break
+
+        for i in range(len(baseline_stack)):
+
+            if (i == 0 and len(baseline_stack) == 1) or i == len(baseline_stack) - 1:
+                angle_to_next = torch.deg2rad(angle_stack[i])
+            else:
+                difference = baseline_stack[i + 1] - baseline_stack[i]
+                angle_to_next = torch.atan2(difference[1], difference[0])
+
+            point_rotation_matrix = torch.stack(
+                [torch.stack([torch.cos(angle_to_next), -1.0 * torch.sin(angle_to_next)]),
+                 torch.stack([1.0 * torch.sin(angle_to_next), torch.cos(angle_to_next)])]).cuda()
+
+            upper_point = torch.stack([torch.tensor(0.).cuda(), -upper_height_stack[i]])
+            upper_point = torch.matmul(upper_point, point_rotation_matrix.t())
+            upper_point = torch.add(upper_point, baseline_stack[i].clone().detach())
+
+            lower_point = torch.stack([torch.tensor(0.).cuda(), lower_height_stack[i]])
+            lower_point = torch.matmul(lower_point, point_rotation_matrix.t())
+            lower_point = torch.add(lower_point, baseline_stack[i].clone().detach())
+
+            results.append(torch.stack([
+                upper_point,
+                baseline_stack[i],
+                lower_point,
+                torch.tensor([0.0, 0.0]).cuda()
+            ]))
+            # point_rotation_matrix = torch.stack(
+            #    [torch.stack([torch.cos(torch.deg2rad(current_angle)), -1.0 * torch.sin(torch.deg2rad(current_angle))]),
+            #     torch.stack(
+            #         [1.0 * torch.sin(torch.deg2rad(current_angle)), torch.cos(torch.deg2rad(current_angle))])]).cuda()
 
         if len(results) == 0:
             return torch.zeros((0, 5, 2)).cuda(), 0, []
